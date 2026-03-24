@@ -20,33 +20,52 @@ const Gallery = () => {
     listings, 
     buyArtwork, 
     getActiveListings, 
-    isLoading 
+    isLoading,
+    isAnalyzing,
+    searchArtworks,
+    getPopularTags,
+    getAvailableStyles,
+    getAvailableMoods,
+    analyzeExistingArtwork,
+    batchAnalyzeArtworks
   } = useMuseStore();
   const { address } = useWalletStore();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterModel, setFilterModel] = useState('all');
   const [filterPrice, setFilterPrice] = useState('all');
+  const [filterStyle, setFilterStyle] = useState('all');
+  const [filterMood, setFilterMood] = useState('all');
+  const [filterVisionAnalyzed, setFilterVisionAnalyzed] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [showPopularTags, setShowPopularTags] = useState(false);
+
+  // Get dynamic filter options
+  const popularTags = getPopularTags();
+  const availableStyles = getAvailableStyles();
+  const availableMoods = getAvailableMoods();
 
   useEffect(() => {
     // Load marketplace data
     getActiveListings();
   }, [getActiveListings]);
   
-  const filteredArtworks = artworks.filter(artwork => {
-    const matchesSearch = artwork.metadata?.prompt?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          artwork.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          false;
-    const matchesModel = filterModel === 'all' || artwork.metadata?.aiModel === filterModel;
+  // Enhanced search using Vision AI data
+  const filteredArtworks = searchArtworks(searchTerm, {
+    aiModel: filterModel,
+    style: filterStyle,
+    mood: filterMood,
+    hasVisionAnalysis: filterVisionAnalyzed
+  }).filter(artwork => {
+    // Apply price filtering
     const listing = listings.find(l => l.tokenId === artwork.id);
     const matchesPrice = filterPrice === 'all' || 
       (filterPrice === 'under-100' && listing && listing.price < 100) ||
       (filterPrice === '100-500' && listing && listing.price >= 100 && listing.price <= 500) ||
       (filterPrice === 'over-500' && listing && listing.price > 500);
     
-    return matchesSearch && matchesModel && matchesPrice;
+    return matchesPrice;
   });
   
   const sortedArtworks = [...filteredArtworks].sort((a, b) => {
@@ -85,6 +104,44 @@ const Gallery = () => {
       toast.error(error.message || 'Failed to purchase artwork');
     }
   };
+
+  const handleAnalyzeArtwork = async (artworkId) => {
+    try {
+      await analyzeExistingArtwork(artworkId);
+      toast.success('Artwork analyzed successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to analyze artwork');
+    }
+  };
+
+  const handleBatchAnalyze = async () => {
+    const unanalyzedArtworks = artworks.filter(a => !a.metadata?.isVisionAnalyzed);
+    if (unanalyzedArtworks.length === 0) {
+      toast('All artworks have been analyzed!');
+      return;
+    }
+
+    try {
+      await batchAnalyzeArtworks(unanalyzedArtworks.map(a => a.id));
+      toast.success(`Successfully analyzed ${unanalyzedArtworks.length} artworks!`);
+    } catch (error) {
+      toast.error(error.message || 'Failed to analyze artworks');
+    }
+  };
+
+  const handleTagClick = (tag) => {
+    setSearchTerm(tag);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterModel('all');
+    setFilterPrice('all');
+    setFilterStyle('all');
+    setFilterMood('all');
+    setFilterVisionAnalyzed(false);
+    setSortBy('recent');
+  };
   
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -95,14 +152,26 @@ const Gallery = () => {
           <p className="text-sm sm:text-base text-gray-600">Explore and collect AI-human collaborative artwork</p>
         </div>
 
-        {/* Mobile Filter Toggle */}
-        <button
-          onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-          className="sm:hidden flex items-center justify-center space-x-2 w-full py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 font-medium shadow-sm"
-        >
-          <Filter className="w-4 h-4" />
-          <span>{isFiltersOpen ? 'Hide Filters' : 'Show Filters'}</span>
-        </button>
+        {/* Vision AI Controls */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleBatchAnalyze}
+            disabled={isAnalyzing || artworks.length === 0}
+            className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors flex items-center gap-2"
+          >
+            {isAnalyzing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-purple-600 border-t-transparent"></div>
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Analyze All
+              </>
+            )}
+          </button>
+        </div>
       </div>
       
       {/* Stats */}
@@ -156,6 +225,55 @@ const Gallery = () => {
         </motion.div>
       </div>
 
+      {/* Popular Tags */}
+      {popularTags.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center mr-3">
+                <TrendingUp className="w-4 h-4 text-orange-600" />
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-gray-900">Popular Tags</h3>
+            </div>
+            <button
+              onClick={() => setShowPopularTags(!showPopularTags)}
+              className="text-xs font-bold px-3 py-1.5 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              {showPopularTags ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          
+          {showPopularTags && (
+            <div className="flex flex-wrap gap-2">
+              {popularTags.slice(0, 12).map(({ tag, count }) => (
+                <button
+                  key={tag}
+                  onClick={() => handleTagClick(tag)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 text-purple-700 hover:text-purple-800 rounded-lg text-xs font-semibold transition-all border border-purple-100 flex items-center gap-1"
+                >
+                  {tag}
+                  <span className="text-purple-500">({count})</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Mobile Filter Toggle */}
+      <button
+        onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+        className="sm:hidden flex items-center justify-center space-x-2 w-full py-2.5 bg-white border border-gray-200 rounded-xl text-gray-700 font-medium shadow-sm"
+      >
+        <Filter className="w-4 h-4" />
+        <span>{isFiltersOpen ? 'Hide Filters' : 'Show Filters'}</span>
+      </button>
+
       {/* Filters & Search */}
       <motion.div
         initial={false}
@@ -163,9 +281,9 @@ const Gallery = () => {
         className={`overflow-hidden sm:overflow-visible transition-all duration-300 ${!isFiltersOpen && 'max-sm:hidden'}`}
       >
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
             {/* Search */}
-            <div className="relative">
+            <div className="relative lg:col-span-2">
               <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
               <input
                 type="text"
@@ -187,6 +305,23 @@ const Gallery = () => {
                 <option value="stable-diffusion">Stable Diffusion</option>
                 <option value="dall-e-3">DALL-E 3</option>
                 <option value="midjourney">Midjourney</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+
+            {/* Style Filter */}
+            <div className="relative">
+              <select
+                value={filterStyle}
+                onChange={(e) => setFilterStyle(e.target.value)}
+                className="w-full pl-4 pr-10 py-2.5 sm:py-3 bg-gray-50 border-transparent rounded-lg sm:rounded-xl text-sm text-gray-700 font-medium focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all appearance-none cursor-pointer"
+              >
+                <option value="all">All Styles</option>
+                {availableStyles.map(style => (
+                  <option key={style} value={style}>{style.charAt(0).toUpperCase() + style.slice(1)}</option>
+                ))}
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-400">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -227,6 +362,40 @@ const Gallery = () => {
               </div>
             </div>
           </div>
+
+          {/* Advanced Filters */}
+          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-3">
+            <label className="flex items-center p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={filterVisionAnalyzed}
+                onChange={(e) => setFilterVisionAnalyzed(e.target.checked)}
+                className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 bg-white mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Vision Analyzed Only</span>
+            </label>
+
+            {availableMoods.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-500">Mood:</span>
+                <div className="flex gap-1">
+                  {availableMoods.slice(0, 4).map(mood => (
+                    <button
+                      key={mood}
+                      onClick={() => setFilterMood(filterMood === mood ? 'all' : mood)}
+                      className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                        filterMood === mood
+                          ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                          : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      {mood}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -235,7 +404,8 @@ const Gallery = () => {
         artworks={visibleItems} 
         listings={listings} 
         onBuyArtwork={handleBuyArtwork} 
-        isLoading={isLoading} 
+        onAnalyzeArtwork={handleAnalyzeArtwork}
+        isLoading={isLoading || isAnalyzing} 
         address={address} 
       />
 
@@ -263,14 +433,9 @@ const Gallery = () => {
               : 'Be the first to create an artwork and it will appear here!'
             }
           </p>
-          {(searchTerm || filterModel !== 'all' || filterPrice !== 'all') && (
+          {(searchTerm || filterModel !== 'all' || filterPrice !== 'all' || filterStyle !== 'all' || filterMood !== 'all' || filterVisionAnalyzed) && (
             <button 
-              onClick={() => {
-                setSearchTerm('');
-                setFilterModel('all');
-                setFilterPrice('all');
-                setSortBy('recent');
-              }}
+              onClick={clearFilters}
               className="mt-6 px-6 py-2.5 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-100 font-semibold transition-colors"
             >
               Clear Filters
