@@ -59,6 +59,16 @@ npm install
 npm install --save-dev @nomicfoundation/hardhat-toolbox @openzeppelin/contracts @openzeppelin/test-helpers
 ```
 
+### Database Setup
+
+Once you have a PostgreSQL instance running, synchronize your database with the Prisma schema:
+
+```bash
+# Initialize and sync the database
+npx prisma migrate dev --name init_marketplace_schema
+```
+
+
 ### Development
 
 ```bash

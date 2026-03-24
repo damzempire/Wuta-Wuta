@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String         @id @default(uuid())
+  walletAddress   String         @unique
+  username        String?
+  bio             String?
+  profileImage    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relations
+  createdArt      ArtAsset[]     @relation("CreatedBy")
+  ownedArt        ArtAsset[]     @relation("OwnedBy")
+  evolutions      Evolution[]    @relation("Evolver")
+  bids            Bid[]
+  tradesAsSeller  TradeHistory[] @relation("Seller")
+  tradesAsBuyer   TradeHistory[] @relation("Buyer")
+}
+
+model ArtAsset {
+  id                String         @id @default(uuid())
+  tokenId           Int?           @unique // Blockchain token ID
+  title             String
+  description       String?
+  imageUrl          String
+  metadata          Json?
+  
+  // Collaborative features
+  aiModel           String?
+  humanContribution Int?           @default(50) // Percentage
+  aiContribution    Int?           @default(50) // Percentage
+  prompt            String?
+  contentHash       String?
+  canEvolve         Boolean        @default(true)
+  
+  // Trading features
+  price             Decimal?       @db.Decimal(20, 8)
+  isForSale         Boolean        @default(true)
+  royaltyPercentage Int?           @default(0) // Basis points (100 = 1%)
+  
+  // Relations
+  creator           User           @relation("CreatedBy", fields: [creatorId], references: [id])
+  creatorId         String
+  owner             User           @relation("OwnedBy", fields: [ownerId], references: [id])
+  ownerId           String
+  
+  evolutions        Evolution[]
+  bids              Bid[]
+  tradeHistory      TradeHistory[]
+  
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([creatorId])
+  @@index([ownerId])
+}
+
+model Evolution {
+  id                String   @id @default(uuid())
+  evolutionId       Int?     // Sequence ID from contract
+  evolutionPrompt   String
+  evolutionHash     String
+  evolutionTimestamp DateTime @default(now())
+  
+  // Relations
+  artAsset          ArtAsset @relation(fields: [artAssetId], references: [id])
+  artAssetId        String
+  evolver           User     @relation("Evolver", fields: [evolverId], references: [id])
+  evolverId         String
+
+  @@index([artAssetId])
+  @@index([evolverId])
+}
+
+model Bid {
+  id          String    @id @default(uuid())
+  amount      Decimal   @db.Decimal(20, 8)
+  status      BidStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  
+  // Relations
+  artAsset    ArtAsset @relation(fields: [artAssetId], references: [id])
+  artAssetId  String
+  bidder      User     @relation(fields: [bidderId], references: [id])
+  bidderId    String
+
+  @@index([artAssetId])
+  @@index([bidderId])
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model TradeHistory {
+  id              String   @id @default(uuid())
+  price           Decimal  @db.Decimal(20, 8)
+  transactionHash String?  // Blockchain transaction hash
+  timestamp       DateTime @default(now())
+  
+  // Relations
+  artAsset        ArtAsset @relation(fields: [artAssetId], references: [id])
+  artAssetId      String
+  seller          User     @relation("Seller", fields: [sellerId], references: [id])
+  sellerId        String
+  buyer           User     @relation("Buyer", fields: [buyerId], references: [id])
+  buyerId         String
+
+  @@index([artAssetId])
+  @@index([sellerId])
+  @@index([buyerId])
+}
