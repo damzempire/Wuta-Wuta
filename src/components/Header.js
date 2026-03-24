@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Menu, Wallet, X, LogOut, Search, Command, Sun, Moon } from 'lucide-react';
+
 import { Button, Badge, Avatar } from './ui';
 import CopyButton from './CopyButton';
 
@@ -56,14 +57,14 @@ const Header = ({ onMenuClick, onConnectWallet, onDisconnectWallet, address, isC
               </div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Muse</h1>
             </div>
-            
+
             {/* Desktop spacer */}
             <div className="hidden md:block w-64"></div>
           </div>
 
           {/* Right side tools */}
           <div className="flex items-center space-x-2 sm:space-x-3 ml-auto">
-            
+
             {/* THEME TOGGLE BUTTON */}
             <Button
               variant="ghost"
@@ -118,7 +119,7 @@ const Header = ({ onMenuClick, onConnectWallet, onDisconnectWallet, address, isC
                   <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium leading-tight">Connected</p>
                   <div className="flex items-center gap-1 group/address">
                     <p className="text-xs sm:text-sm font-mono font-bold text-gray-900 dark:text-white leading-tight">
-                      {address.slice(0, 4)}...{address.slice(-4)}
+                      {address?.slice ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Connecting...'}
                     </p>
                     <CopyButton text={address} className="opacity-0 group-hover/address:opacity-100 transition-opacity -my-1 -ml-1" />
                   </div>
@@ -129,3 +130,24 @@ const Header = ({ onMenuClick, onConnectWallet, onDisconnectWallet, address, isC
                   onClick={onDisconnectWallet}
                   className="p-1.5 sm:p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 ml-1"
                 >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={onConnectWallet}
+                className="rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-lg hover:shadow-purple-500/20 px-6"
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                Connect
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.header>
+  );
+};
+
+export default Header;

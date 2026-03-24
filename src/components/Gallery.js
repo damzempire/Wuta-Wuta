@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useInfiniteScroll } from '../utils/useInfiniteScroll';
 import { motion } from 'framer-motion';
 import { 
-  Gallery as GalleryIcon, 
+  Image as GalleryIcon, 
   Search, 
   ShoppingCart,
   TrendingUp,

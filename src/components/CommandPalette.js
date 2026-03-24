@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
-  Gallery as GalleryIcon,
+  Image as GalleryIcon,
   LayoutDashboard,
   Sparkles,
   User,

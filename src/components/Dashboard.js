@@ -1,21 +1,28 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  DollarSign, 
-  Users, 
-  TrendingUp, 
+import {
+  DollarSign,
+  Users,
+  TrendingUp,
   Activity,
   ArrowUpRight,
   ArrowDownRight,
   Wallet,
   Clock
 } from 'lucide-react';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useFlowStore } from '../store/flowStore';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from 'recharts';
+import { useMuseStore } from '../store/museStore';
 import { Card, CardHeader, CardTitle, CardContent, Badge } from './ui';
 
 const Dashboard = () => {
-  const { stats, recentActivity, topProjects } = useFlowStore();
+  // Stats and activity are currently simulated for demonstration
+  // In a future update, these will be pulled from museStore and on-chain events
+  const stats = {
+    totalFunding: '$28,450',
+    activeContributors: '1,234',
+    projectsFunded: '89',
+    transactionVolume: '$45,678'
+  };
 
   // Mock data for demonstration
   const fundingData = [
@@ -73,7 +80,7 @@ const Dashboard = () => {
     <div className="space-y-6 px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Flow Analytics Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Muse Analytics Dashboard</h1>
         <p className="text-sm sm:text-base text-gray-600 mt-2">Real-time insights and analytics for Web3 funding streams</p>
       </div>
 
@@ -123,7 +130,7 @@ const Dashboard = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={12} tickMargin={10} />
                   <YAxis fontSize={12} width={40} />
-                  <Tooltip />
+                  <ChartTooltip />
                   <Area type="monotone" dataKey="amount" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -151,7 +158,7 @@ const Dashboard = () => {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <ChartTooltip />
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-2 mt-4 sm:mt-6">
@@ -178,9 +185,8 @@ const Dashboard = () => {
               {recentTransactions.map((transaction) => (
                 <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                   <div className="flex items-center min-w-0 mr-3">
-                    <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
-                      transaction.type === 'funding' ? 'bg-green-500' : 'bg-blue-500'
-                    }`} />
+                    <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${transaction.type === 'funding' ? 'bg-green-500' : 'bg-blue-500'
+                      }`} />
                     <div className="min-w-0">
                       <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{transaction.from}</p>
                       <p className="text-[10px] sm:text-xs text-gray-500 truncate">→ {transaction.to}</p>

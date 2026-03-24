@@ -7,6 +7,7 @@ import {
   ExternalLink,
   RefreshCw,
   Filter,
+  Coins,
   XLM,
   Search,
   Calendar,
@@ -240,7 +241,7 @@ const TransactionHistory = () => {
           className="bg-white rounded-lg shadow p-4"
         >
           <div className="flex items-center">
-            <XLM className="w-8 h-8 text-blue-600 mr-3" />
+            <Coins className="w-8 h-8 text-blue-600 mr-3" />
             <div>
               <p className="text-2xl font-bold text-gray-900">
                 {filteredTransactions.reduce((sum, tx) => sum + (parseFloat(tx.fee) || 0), 0).toFixed(2)}

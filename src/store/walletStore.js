@@ -1,67 +1,126 @@
 import { create } from 'zustand';
-import { ethers } from 'ethers';
+import * as freighterApi from '@stellar/freighter-api';
+
+// Helper to get functions regardless of import structure
+const getFreighterMethod = (methodName) => {
+  // Check main import
+  if (freighterApi[methodName]) return freighterApi[methodName];
+  // Check default export if exists
+  if (freighterApi.default && freighterApi.default[methodName]) return freighterApi.default[methodName];
+  // Check global object
+  if (window.freighterApi && window.freighterApi[methodName]) return window.freighterApi[methodName];
+
+  // Variation check: getPublicKey vs getAddress
+  if (methodName === 'getPublicKey') {
+    return getFreighterMethod('getAddress');
+  }
+
+  return null;
+};
 
 const useWalletStore = create((set, get) => ({
   // State
   isConnecting: false,
   isConnected: false,
   address: null,
-  provider: null,
-  signer: null,
-  balance: null,
-  chainId: null,
+  network: null,
   error: null,
+  isLoading: false,
 
   // Actions
+  checkConnection: async () => {
+    try {
+      const isConnected = getFreighterMethod('isConnected');
+      const getPublicKey = getFreighterMethod('getPublicKey');
+      const getNetwork = getFreighterMethod('getNetwork');
+
+      if (isConnected && await isConnected()) {
+        let publicKey = await getPublicKey();
+        const networkValue = await getNetwork();
+
+        // Handle object return from newer Freighter versions
+        if (publicKey && typeof publicKey === 'object') {
+          publicKey = publicKey.address || publicKey.publicKey || publicKey.id || '';
+        }
+
+        // Handle network object return
+        let networkName = networkValue;
+        if (networkValue && typeof networkValue === 'object') {
+          networkName = networkValue.network || networkValue.networkPassphrase || 'Unknown';
+        }
+
+        if (publicKey) {
+          set({
+            address: String(publicKey),
+            network: String(networkName),
+            isConnected: true,
+            error: null
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Check connection error:', error);
+      return false;
+    }
+  },
+
   connectWallet: async () => {
     try {
       set({ isConnecting: true, error: null });
 
-      // Check if MetaMask is installed
-      if (!window.ethereum) {
-        throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
+      const isConnected = getFreighterMethod('isConnected');
+      const setAllowed = getFreighterMethod('setAllowed') || getFreighterMethod('requestAccess');
+      const getPublicKey = getFreighterMethod('getPublicKey');
+      const getNetwork = getFreighterMethod('getNetwork');
+
+      if (!isConnected || !await isConnected()) {
+        throw new Error('Freighter wallet not found. Please install the extension.');
       }
 
-      // Request account access
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      // Explicitly request access/permission first
+      if (setAllowed) {
+        const result = await setAllowed();
+        if (result && result.error) {
+          throw new Error(result.error);
+        }
+      }
 
-      // Create provider and signer
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-      const balance = await provider.getBalance(address);
-      const network = await provider.getNetwork();
+      let publicKey = await getPublicKey();
+      const networkValue = await getNetwork();
+
+      // Handle object return from newer Freighter versions
+      if (publicKey && typeof publicKey === 'object') {
+        publicKey = publicKey.address || publicKey.publicKey || publicKey.id || '';
+      }
+
+      // Handle network object return
+      let networkName = networkValue;
+      if (networkValue && typeof networkValue === 'object') {
+        networkName = networkValue.network || networkValue.networkPassphrase || 'Unknown';
+      }
+
+      if (!publicKey) {
+        throw new Error('Failed to retrieve public key from Freighter.');
+      }
 
       set({
         isConnecting: false,
         isConnected: true,
-        address,
-        provider,
-        signer,
-        balance,
-        chainId: Number(network.chainId),
+        address: String(publicKey),
+        network: String(networkName),
         error: null,
       });
 
-      // Listen for account changes
-      window.ethereum.on('accountsChanged', (accounts) => {
-        if (accounts.length === 0) {
-          get().disconnectWallet();
-        } else {
-          get().updateAccount(accounts[0]);
-        }
-      });
-
-      // Listen for chain changes
-      window.ethereum.on('chainChanged', () => {
-        window.location.reload();
-      });
+      // Save connection preference
+      localStorage.setItem('walletConnected', 'true');
 
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      set({ 
-        isConnecting: false, 
-        error: error.message 
+      set({
+        isConnecting: false,
+        error: error.message
       });
     }
   },
@@ -71,84 +130,18 @@ const useWalletStore = create((set, get) => ({
       isConnecting: false,
       isConnected: false,
       address: null,
-      provider: null,
-      signer: null,
-      balance: null,
-      chainId: null,
+      network: null,
       error: null,
     });
+    localStorage.removeItem('walletConnected');
   },
 
-  updateAccount: async (newAddress) => {
-    try {
-      const { provider } = get();
-      if (!provider) return;
-
-      const signer = await provider.getSigner();
-      const balance = await provider.getBalance(newAddress);
-
-      set({
-        address: newAddress,
-        signer,
-        balance,
-      });
-    } catch (error) {
-      console.error('Failed to update account:', error);
-    }
+  updateAccount: (newAddress) => {
+    set({ address: newAddress });
   },
 
-  sendTransaction: async (to, value) => {
-    try {
-      const { signer } = get();
-      if (!signer) throw new Error('Wallet not connected');
-
-      const tx = await signer.sendTransaction({
-        to,
-        value: ethers.parseEther(value),
-      });
-
-      return tx;
-    } catch (error) {
-      console.error('Failed to send transaction:', error);
-      throw error;
-    }
-  },
-
-  switchNetwork: async (chainId) => {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${chainId.toString(16)}` }],
-      });
-    } catch (error) {
-      console.error('Failed to switch network:', error);
-      throw error;
-    }
-  },
-
-  addNetwork: async (networkConfig) => {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [networkConfig],
-      });
-    } catch (error) {
-      console.error('Failed to add network:', error);
-      throw error;
-    }
-  },
-
-  signMessage: async (message) => {
-    try {
-      const { signer } = get();
-      if (!signer) throw new Error('Wallet not connected');
-
-      const signature = await signer.signMessage(message);
-      return signature;
-    } catch (error) {
-      console.error('Failed to sign message:', error);
-      throw error;
-    }
+  updateNetwork: (newNetwork) => {
+    set({ network: newNetwork });
   },
 
   clearError: () => set({ error: null }),

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import {
-  Gallery as GalleryIcon,
+  Image as GalleryIcon,
   LayoutDashboard,
   Sparkles,
   Command
