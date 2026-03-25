@@ -129,13 +129,15 @@ impl WutaWutaMarketplace {
         admin.require_auth();
 
         // Validate inputs
-        require!(!ipfs_hash.is_empty(), "IPFS hash required");
-        require!(!title.is_empty(), "Title required");
-        require!(!ai_model.is_empty(), "AI model required");
-        require!(royalty_percentage <= 1000, "Royalty too high (max 10%)");
+        if ipfs_hash.is_empty() { panic!("IPFS hash required"); }
+        if title.is_empty() { panic!("Title required"); }
+        if ai_model.is_empty() { panic!("AI model required"); }
+        if royalty_percentage > 1000 { panic!("Royalty too high (max 10%)"); }
         
         if is_collaborative {
-            require!(ai_contribution + human_contribution == 100, "Contributions must sum to 100");
+            if ai_contribution + human_contribution != 100 {
+                panic!("Contributions must sum to 100");
+            }
         }
 
         let token_id = Self::increment_nft_counter(env.clone());
@@ -206,20 +208,20 @@ impl WutaWutaMarketplace {
 
         // Verify ownership
         let owner = Self::get_token_owner(env.clone(), token_id);
-        require!(owner == seller, "Not the token owner");
+        if owner != seller { panic!("Not the token owner"); }
 
         // Verify not already listed
-        let listings = Self::get_listings(env.clone());
-        require!(!listings.contains_key(&token_id), "Already listed");
+        let listings = Self::get_listings_map(env.clone());
+        if listings.contains_key(token_id) { panic!("Already listed"); }
 
         // Validate inputs
-        require!(price > 0, "Price must be positive");
-        require!(duration > 0, "Duration must be positive");
-        require!(duration <= 2592000, "Duration too long (max 30 days)");
+        if price <= 0 { panic!("Price must be positive"); }
+        if duration <= 0 { panic!("Duration must be positive"); }
+        if duration > 2592000 { panic!("Duration too long (max 30 days)"); }
 
         if auction_style {
-            require!(reserve_price.is_some(), "Reserve price required for auctions");
-            require!(reserve_price.unwrap() > 0, "Reserve price must be positive");
+            if reserve_price.is_none() { panic!("Reserve price required for auctions"); }
+            if reserve_price.unwrap() <= 0 { panic!("Reserve price must be positive"); }
         }
 
         let start_time = env.ledger().timestamp();
@@ -252,9 +254,9 @@ impl WutaWutaMarketplace {
 
         let listings = Self::get_listings_map(env.clone());
         let listing = listings.get(token_id).unwrap_optimized();
-        require!(listing.active, "Listing not active");
-        require!(!listing.auction_style, "Use auction functions for auction listings");
-        require!(env.ledger().timestamp() < listing.start_time + listing.duration, "Listing expired");
+        if !listing.active { panic!("Listing not active"); }
+        if listing.auction_style { panic!("Use auction functions for auction listings"); }
+        if env.ledger().timestamp() >= listing.start_time + listing.duration { panic!("Listing expired"); }
 
         let marketplace_fee = Self::get_marketplace_fee(env.clone());
         let treasury = Self::get_treasury(env.clone());

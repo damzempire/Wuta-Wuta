@@ -1,75 +1,69 @@
-use soroban_sdk::contract::{contract, contractimpl, Address, Env, Symbol};
-use soroban_sdk::token::Token;
-use soroban_sdk::crypto::sha256;
-use soroban_sdk::vec::Vec;
+use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, String, Vec, Map};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct ArtworkMetadata {
+    pub creator: Address,
+    pub metadata_url: String,
+    pub content_hash: String,
+}
 
 #[contract]
-pub struct ArtAssetToken {
-    admin: Address,
-    asset_code: Symbol,
-    total_supply: i128,
-    metadata_url: String,
-}
+pub struct ArtAssetToken;
 
 #[contractimpl]
 impl ArtAssetToken {
-    pub fn initialize(env: Env, admin: Address, asset_code: Symbol, metadata_url: String) {
-        env.storage().instance().set(&admin);
-        env.storage().instance().set(&asset_code);
-        env.storage().instance().set(&metadata_url);
-        env.storage().instance().set(&0i128);
+    pub fn initialize(env: Env, admin: Address) {
+        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
+        env.storage().instance().set(&Symbol::new(&env, "counter"), &0u64);
     }
 
-    pub fn mint(env: Env, to: Address, amount: i128, token_uri: String) -> i128 {
-        let admin = Self::get_admin(env);
+    pub fn mint(env: Env, to: Address, _amount: i128, metadata_url: String, content_hash: String) -> u64 {
+        let admin: Address = env.storage().instance().get(&Symbol::new(&env, "admin")).unwrap();
         admin.require_auth();
 
-        let current_supply = Self::get_total_supply(env);
-        let new_supply = current_supply + amount;
+        let mut counter: u64 = env.storage().instance().get(&Symbol::new(&env, "counter")).unwrap_or(0);
+        counter += 1;
         
-        env.storage().instance().set(&new_supply);
+        let metadata = ArtworkMetadata {
+            creator: to.clone(),
+            metadata_url: metadata_url.clone(),
+            content_hash: content_hash.clone(),
+        };
+
+        let mut artworks: Map<u64, ArtworkMetadata> = env.storage().instance()
+            .get(&Symbol::new(&env, "artworks"))
+            .unwrap_or(Map::new(&env));
+        
+        artworks.set(counter, metadata);
+        
+        env.storage().instance().set(&Symbol::new(&env, "counter"), &counter);
+        env.storage().instance().set(&Symbol::new(&env, "artworks"), &artworks);
         
         // Mint event
         env.events().publish(
-            (Symbol::new(&env, "mint"),
-            (to.clone(), amount, token_uri)
+            (Symbol::new(&env, "mint"), to, counter),
+            metadata_url
         );
         
-        new_supply
+        counter
     }
 
-    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
-        from.require_auth();
+    pub fn get_artwork(env: Env, token_id: u64) -> ArtworkMetadata {
+        let artworks: Map<u64, ArtworkMetadata> = env.storage().instance()
+            .get(&Symbol::new(&env, "artworks"))
+            .expect("No artworks stored");
         
-        let current_supply = Self::get_total_supply(env);
-        require!(current_supply >= amount, "Insufficient supply");
-        
-        // Transfer logic
-        env.events().publish(
-            (Symbol::new(&env, "transfer"),
-            (from, to, amount)
-        );
+        artworks.get(token_id).expect("Artwork not found")
     }
 
-    pub fn set_metadata(env: Env, metadata_url: String) {
-        let admin = Self::get_admin(env);
+    pub fn total_supply(env: Env) -> u64 {
+        env.storage().instance().get(&Symbol::new(&env, "counter")).unwrap_or(0)
+    }
+
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let admin: Address = env.storage().instance().get(&Symbol::new(&env, "admin")).unwrap();
         admin.require_auth();
-        env.storage().instance().set(&metadata_url);
-    }
-
-    fn get_admin(env: Env) -> Address {
-        env.storage().instance().get(&Address::default()).unwrap()
-    }
-
-    fn get_total_supply(env: Env) -> i128 {
-        env.storage().instance().get(&0i128).unwrap_or(0)
-    }
-
-    fn get_asset_code(env: Env) -> Symbol {
-        env.storage().instance().get(&Symbol::default()).unwrap()
-    }
-
-    fn get_metadata(env: Env) -> String {
-        env.storage().instance().get(&String::default()).unwrap_or_default()
+        env.storage().instance().set(&Symbol::new(&env, "admin"), &new_admin);
     }
 }

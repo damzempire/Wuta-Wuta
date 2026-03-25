@@ -41,6 +41,12 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     mapping(address => uint256[]) public creatorTokens;
     mapping(uint256 => uint256) public tokenEvolutionIndex;
 
+    // Additional artwork metadata
+    mapping(uint256 => address) public artworkArtist;
+    mapping(uint256 => string) public artworkImageCID;
+    mapping(uint256 => string) public artworkAIModel;
+    uint256 public totalMinted;
+
     // AI Model registry
     mapping(string => bool) public registeredModels;
     address[] public modelRegistrars;
@@ -60,6 +66,14 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         string aiModel,
         uint256 humanContribution,
         uint256 aiContribution
+    );
+
+    event ArtworkMinted(
+        uint256 indexed tokenId,
+        address indexed artist,
+        string tokenURI,
+        string imageCID,
+        string aiModel
     );
 
     event ArtworkEvolved(
@@ -105,13 +119,70 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         emit AIModelRegistered(modelName, msg.sender);
     }
 
+    /**
+     * @dev Mint a new artwork NFT with IPFS metadata security.
+     * Implements requirements from Issue #39 and Issue #6.
+     */
+    function mintArtwork(
+        address artist,
+        string memory _tokenURI,
+        string memory imageCID,
+        string memory aiModel,
+        uint256 royaltyBps
+    ) external returns (uint256) {
+        // Issue #6: IPFS URI enforcement
+        require(
+            bytes(_tokenURI).length >= 7 && 
+            keccak256(abi.encodePacked(_substring(_tokenURI, 0, 7))) == keccak256(abi.encodePacked("ipfs://")),
+            "MuseNFT: tokenURI must be an IPFS URI (ipfs://...)"
+        );
+        require(bytes(imageCID).length > 0, "MuseNFT: imageCID cannot be empty");
+        require(royaltyBps <= MAX_ROYALTY, "MuseNFT: royalty cannot exceed 10%");
+
+        _tokenIdCounter.increment();
+        uint256 newTokenId = _tokenIdCounter.current();
+
+        _safeMint(artist, newTokenId);
+        _setTokenURI(newTokenId, _tokenURI);
+
+        // Store metadata
+        artworkArtist[newTokenId] = artist;
+        artworkImageCID[newTokenId] = imageCID;
+        artworkAIModel[newTokenId] = aiModel;
+        royaltyPercentage[newTokenId] = royaltyBps;
+        totalMinted++;
+
+        emit ArtworkMinted(newTokenId, artist, _tokenURI, imageCID, aiModel);
+
+        return newTokenId;
+    }
+
+    /**
+     * @dev Helper to get a substring of a string.
+     */
+    function _substring(string memory str, uint256 startIndex, uint256 endIndex) internal pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        bytes memory result = new bytes(endIndex - startIndex);
+        for (uint256 i = startIndex; i < endIndex; i++) {
+            result[i - startIndex] = strBytes[i];
+        }
+        return string(result);
+    }
+
+    /**
+     * @dev Returns the Pinata gateway URL for the image.
+     */
+    function artworkGatewayURL(uint256 tokenId) external view onlyValidToken(tokenId) returns (string memory) {
+        return string(abi.encodePacked("https://gateway.pinata.cloud/ipfs/", artworkImageCID[tokenId]));
+    }
+
     // Create collaborative artwork
     function createCollaborativeArtwork(
         string memory aiModel,
         uint256 humanContribution,
         uint256 aiContribution,
         string memory prompt,
-        string memory tokenURI,
+        string memory _tokenURI,
         bytes32 contentHash,
         bool canEvolve
     ) external payable nonReentrant returns (uint256) {
@@ -120,8 +191,8 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         require(bytes(prompt).length > 0, "Prompt required");
         require(contentHash != 0, "Content hash required");
 
-        uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
+        uint256 tokenId = _tokenIdCounter.current();
 
         collaborations[tokenId] = Collaboration({
             tokenId: tokenId,
@@ -140,7 +211,7 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         tokenEvolutionIndex[tokenId] = 0;
 
         _safeMint(msg.sender, tokenId);
-        _setTokenURI(tokenId, tokenURI);
+        _setTokenURI(tokenId, _tokenURI);
 
         emit ArtworkCreated(
             tokenId,
@@ -256,9 +327,10 @@ contract MuseNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 tokenId
+        uint256 firstTokenId,
+        uint256 batchSize
     ) internal override {
-        super._beforeTokenTransfer(from, to, tokenId);
+        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
     }
 
     // Total supply
