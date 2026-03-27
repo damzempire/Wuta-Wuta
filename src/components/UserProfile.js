@@ -20,6 +20,7 @@ import { useUserProfileStore } from '../store/userProfileStore';
 
 import ArtworkGrid from './ArtworkGrid';
 import CopyButton from './CopyButton';
+import PriceHistoryChart from './PriceHistoryChart';
 
 const UserProfile = () => {
   const { listings } = useMuseStore();
@@ -32,7 +33,8 @@ const UserProfile = () => {
     updateCollectionFilters,
     updateCollectionView,
     getFilteredCollection,
-    getFilteredTradingHistory
+    getFilteredTradingHistory,
+    getPriceHistoryForArtwork
   } = useUserProfileStore();
 
   useEffect(() => {
@@ -151,6 +153,22 @@ const UserProfile = () => {
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
+        {/* Price History Chart - Full Width on Top */}
+        {filteredTransactions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="xl:col-span-3"
+          >
+            <PriceHistoryChart 
+              priceData={filteredTransactions}
+              title="Portfolio Price History"
+              currency="ETH"
+            />
+          </motion.div>
+        )}
+
         {/* Art Collection Section (Takes up more space) */}
         <div className="xl:col-span-2 space-y-6">
           <motion.div

@@ -449,6 +449,25 @@ const useUserProfileStore = create(
       },
 
       // Getters
+      // Get price history for a specific artwork
+      getPriceHistoryForArtwork: (artworkId) => {
+        const { transactions } = get().tradingHistory;
+        
+        // Filter transactions for this artwork and return price data
+        const artworkSales = transactions
+          .filter(tx => tx.artworkId === artworkId && (tx.type === 'sale' || tx.type === 'purchase'))
+          .map(tx => ({
+            timestamp: tx.timestamp,
+            price: tx.price,
+            buyer: tx.buyer,
+            seller: tx.seller,
+            txHash: tx.txHash
+          }))
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        return artworkSales;
+      },
+
       getFilteredCollection: () => {
         const { artworks, filters, sortBy } = get().collection;
         
